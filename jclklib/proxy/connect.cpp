@@ -10,7 +10,7 @@
 #include <sys/epoll.h>
 
 //TODO: subsription part
-//#include "thread.hpp"
+#include "thread.hpp"
 //#include "ptp4l_connect.hpp"
 
 using namespace std;
@@ -77,7 +77,7 @@ const port_info *designated_port_get()
 
 void handle(bool local)
 {
-	const BaseMngTlv *data = msg.getData();
+    const BaseMngTlv *data = msg.getData();
     PORT_PROPERTIES_NP_t *pp;
     PORT_DATA_SET_t *pd;
     portState_e portState;
@@ -183,13 +183,13 @@ static inline bool sendGet(bool local, mng_vals_e id)
 }
 
 //TODO: subscription part
-//bool send_subscription(struct jcl_handle *handle)
-bool send_subscription()
+bool send_subscription(struct jcl_handle **handle)
+//bool send_subscription()
 {
     memset(d.bitmask, 0, sizeof d.bitmask);
     d.duration = SUBSCRIBE_DURATION;
     d.setEvent(NOTIFY_PORT_STATE);
-    d.setEvent(NOTIFY_TIME_SYNC); 
+    d.setEvent(NOTIFY_TIME_SYNC);
 
     //TODO: subscription part
 /*   struct jcl_subscription subscription;
@@ -197,6 +197,7 @@ bool send_subscription()
 	subscription.threshold.offset = 100;
     handle->subscription = subscription;
 */
+
     if(!msg.setAction(SET, SUBSCRIBE_EVENTS_NP, &d)) {
         fprintf(stderr, "Fail set SUBSCRIBE_EVENTS_NP\n");
         return false;
@@ -207,12 +208,12 @@ bool send_subscription()
 }
 
 void *loop( void *arg)
-//static void loop(void)
 {
     const uint64_t timeout_ms = 1000; // 1 second
-	for(;;) {
+
+    for(;;) {
         if(!sendGet(true, PORT_PROPERTIES_NP))
-                break;
+            goto end_loop;
         ssize_t cnt;
 
         sk->poll(timeout_ms);
@@ -226,9 +227,9 @@ void *loop( void *arg)
             }
         }
     }
+
     // Send to all
     sendGet(false, PORT_PROPERTIES_NP);
-    send_subscription();
 
     while (1) {
         if (epoll_wait( epd, &epd_event, 1, 100) != -1) {
@@ -239,6 +240,8 @@ void *loop( void *arg)
                 handle(false);
         }
     }
+end_loop:
+    return;
 }
 
 int Connect::connect()
@@ -277,20 +280,16 @@ int Connect::connect()
     epd = epoll_create1( 0);
     if( epd == -1) {
 		ret = -errno;
-        printf("epoll create failed");
 	}
 
 	epd_event.data.fd = sk->fileno();
 	epd_event.events  = ( EPOLLIN | EPOLLERR);
 	if( epoll_ctl( epd, EPOLL_CTL_ADD, sk->fileno(), &epd_event) == 1) {
 		ret = -errno;
-        printf("epoll ctl failed");
 	}
-   
-    //TODO: subscription part
-    //jcl_handle_connect( NULL, epd_event);
 
-    //TODO: to be removed, for testing purpose
-    loop(NULL);
+    //TODO: subscription part
+    handle_connect( NULL, epd_event);
+
     return 0;
 }
